@@ -139,8 +139,10 @@ class RelayApp(App):
         if self.grid is None:
             self._cleaned_up = True
             return
-        self.grid.cleanup()
-        self._cleaned_up = True
+        try:
+            self.grid.cleanup()
+        finally:
+            self._cleaned_up = True
 
     def on_stop(self):
         self._cleanup_gpio()
