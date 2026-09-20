@@ -46,6 +46,12 @@ source ~/hmi-venv/bin/activate
 python main.py
 ```
 
+## Logic test without GPIO
+
+```bash
+python -m unittest discover -s tests
+```
+
 ## Autostart with systemd
 
 Copy service file:
