@@ -127,6 +127,8 @@ class RelayApp(App):
         self.controller = RelayController(RELAY_PINS, active_low=ACTIVE_LOW, gpio=GPIO)
         self._cleaned_up = False
         self._cleanup_in_progress = False
+        self._relays_powered_down = False
+        self._gpio_cleaned = False
         atexit.register(self._cleanup_gpio)
 
     def build(self):
@@ -139,11 +141,17 @@ class RelayApp(App):
             return
         self._cleanup_in_progress = True
         try:
-            if self.grid is not None:
-                self.grid.cleanup()
-            else:
-                self.controller.all_off()
+            if not self._relays_powered_down:
+                if self.grid is not None:
+                    self.grid.all_off()
+                else:
+                    self.controller.all_off()
+                self._relays_powered_down = True
+
+            if not self._gpio_cleaned:
                 self.controller.cleanup_gpio()
+                self._gpio_cleaned = True
+
             self._cleaned_up = True
         finally:
             self._cleanup_in_progress = False
