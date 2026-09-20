@@ -33,8 +33,16 @@ class RelayController:
         return self.set_state(pin, not self.states[pin])
 
     def all_off(self):
+        first_error = None
         for pin in self.relay_pins:
-            self.set_state(pin, False)
+            try:
+                self.set_state(pin, False)
+            except Exception as error:
+                if first_error is None:
+                    first_error = error
+
+        if first_error is not None:
+            raise first_error
 
     def cleanup_gpio(self):
         self.gpio.cleanup()

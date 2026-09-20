@@ -140,19 +140,28 @@ class RelayApp(App):
         if self._cleaned_up or self._cleanup_in_progress:
             return
         self._cleanup_in_progress = True
+        relay_error = None
         try:
             if not self._relays_powered_down:
-                if self.grid is not None:
-                    self.grid.all_off()
-                else:
+                try:
                     self.controller.all_off()
-                self._relays_powered_down = True
+                    self._relays_powered_down = True
+                except Exception as error:
+                    relay_error = error
 
-            if self._relays_powered_down and not self._gpio_cleaned:
+                if self.grid is not None:
+                    try:
+                        self.grid.sync_buttons()
+                    except Exception:
+                        pass
+
+            if not self._gpio_cleaned:
                 self.controller.cleanup_gpio()
                 self._gpio_cleaned = True
 
-            self._cleaned_up = True
+            self._cleaned_up = self._gpio_cleaned
+            if relay_error is not None:
+                raise relay_error
         finally:
             self._cleanup_in_progress = False
 

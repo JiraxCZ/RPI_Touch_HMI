@@ -34,6 +34,17 @@ class FakeGPIO:
         self.cleaned_up = True
 
 
+class FailingGPIO(FakeGPIO):
+    def __init__(self, failing_pin):
+        super().__init__()
+        self.failing_pin = failing_pin
+
+    def output(self, pin, value):
+        if pin == self.failing_pin:
+            raise RuntimeError(f"GPIO failure on pin {pin}")
+        super().output(pin, value)
+
+
 class RelayControllerTest(unittest.TestCase):
     def test_setup_initializes_all_relays_off_for_active_low(self):
         gpio = FakeGPIO()
@@ -77,6 +88,17 @@ class RelayControllerTest(unittest.TestCase):
         self.assertEqual(gpio.outputs[17], gpio.LOW)
         self.assertEqual(gpio.outputs[27], gpio.LOW)
         self.assertTrue(gpio.cleaned_up)
+
+    def test_all_off_attempts_remaining_relays_after_failure(self):
+        gpio = FailingGPIO(failing_pin=17)
+        controller = RelayController([17, 27], active_low=True, gpio=gpio)
+        controller.states[17] = True
+        controller.states[27] = True
+
+        with self.assertRaisesRegex(RuntimeError, "pin 17"):
+            controller.all_off()
+
+        self.assertEqual(gpio.outputs[27], gpio.HIGH)
 
 
 if __name__ == "__main__":
