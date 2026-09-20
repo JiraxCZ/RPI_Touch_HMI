@@ -88,7 +88,6 @@ class RelayGrid(GridLayout):
             Color(0.08, 0.09, 0.12, 1)
             self.background_rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._update_background, size=self._update_background)
-        self.bind(pos=self._update_background, size=self._update_background)
 
         self.controller = controller
 
