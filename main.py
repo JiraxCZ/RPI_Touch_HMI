@@ -148,7 +148,7 @@ class RelayApp(App):
                     self.controller.all_off()
                 self._relays_powered_down = True
 
-            if not self._gpio_cleaned:
+            if self._relays_powered_down and not self._gpio_cleaned:
                 self.controller.cleanup_gpio()
                 self._gpio_cleaned = True
 
