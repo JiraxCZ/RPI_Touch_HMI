@@ -1,64 +1,73 @@
-# RPI Touch HMI (720x720)
+import unittest
 
-A touch-friendly Kivy application for Raspberry Pi to control **4 relays** on a **720x720 px** display.
+from relay_controller import RelayController
 
-## Features
 
-- Fullscreen touch GUI for 720x720
-- Four large relay buttons (ON/OFF)
-- Color state indication (green = ON, red = OFF)
-- Safe relay shutdown on app exit
-- systemd service file for autostart
+class FakeGPIO:
+    BCM = 1
+    OUT = 0
+    HIGH = 1
+    LOW = 0
 
-## Hardware
+    def __init__(self):
+        self.outputs = {}
+        self.cleaned_up = False
 
-- Raspberry Pi (with GPIO)
-- Touch display 720x720
-- 4-channel relay module
+    def setmode(self, mode):
+        self.mode = mode
 
-## GPIO Mapping (BCM)
+    def setwarnings(self, value):
+        self.warnings_enabled = value
 
-- Relay 1 -> GPIO17 (physical pin 11)
-- Relay 2 -> GPIO27 (physical pin 13)
-- Relay 3 -> GPIO22 (physical pin 15)
-- Relay 4 -> GPIO23 (physical pin 16)
+    def setup(self, pin, mode):
+        self.outputs.setdefault(pin, self.LOW)
 
-> The app is configured for **active-low** relay boards (`ACTIVE_LOW = True`).
-> If your board is active-high, set `ACTIVE_LOW = False` in `main.py`.
+    def output(self, pin, value):
+        self.outputs[pin] = value
 
-## Installation
+    def cleanup(self):
+        self.cleaned_up = True
 
-```bash
-sudo apt update
-sudo apt install -y python3-pip python3-venv libatlas-base-dev
 
-cd ~/RPI_Touch_HMI
-python3 -m venv ~/hmi-venv
-source ~/hmi-venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
+class RelayControllerTest(unittest.TestCase):
+    def test_setup_initializes_all_relays_off_for_active_low(self):
+        gpio = FakeGPIO()
+        controller = RelayController([17, 27], active_low=True, gpio=gpio)
 
-## Run manually
+        controller.setup()
 
-```bash
-source ~/hmi-venv/bin/activate
-python main.py
-```
+        self.assertFalse(controller.is_on(17))
+        self.assertFalse(controller.is_on(27))
+        self.assertEqual(gpio.outputs[17], gpio.HIGH)
+        self.assertEqual(gpio.outputs[27], gpio.HIGH)
 
-## Autostart with systemd
+    def test_toggle_uses_explicit_state_and_returns_new_value(self):
+        gpio = FakeGPIO()
+        controller = RelayController([17, 27], active_low=True, gpio=gpio)
+        controller.setup()
 
-Copy service file:
+        self.assertTrue(controller.toggle(17))
+        self.assertTrue(controller.is_on(17))
+        self.assertEqual(gpio.outputs[17], gpio.LOW)
 
-```bash
-sudo cp hmi.service /etc/systemd/system/hmi.service
-sudo systemctl daemon-reload
-sudo systemctl enable hmi.service
-sudo systemctl start hmi.service
-```
+        self.assertFalse(controller.toggle(17))
+        self.assertFalse(controller.is_on(17))
+        self.assertEqual(gpio.outputs[17], gpio.HIGH)
 
-Check status:
+    def test_all_off_turns_every_relay_off(self):
+        gpio = FakeGPIO()
+        controller = RelayController([17, 27], active_low=False, gpio=gpio)
+        controller.setup()
 
-```bash
-sudo systemctl status hmi.service
-```
+        controller.set_state(17, True)
+        controller.set_state(27, True)
+        controller.all_off()
+
+        self.assertFalse(controller.is_on(17))
+        self.assertFalse(controller.is_on(27))
+        self.assertEqual(gpio.outputs[17], gpio.LOW)
+        self.assertEqual(gpio.outputs[27], gpio.LOW)
+
+
+if __name__ == '__main__':
+    unittest.main()
