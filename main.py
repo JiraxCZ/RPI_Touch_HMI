@@ -77,7 +77,7 @@ class RelayButton(ToggleButton):
 
 
 class RelayGrid(GridLayout):
-    def __init__(self, gpio=None, **kwargs):
+    def __init__(self, controller, **kwargs):
         super().__init__(**kwargs)
         self.cols = 2
         self.rows = 2
@@ -87,11 +87,10 @@ class RelayGrid(GridLayout):
         with self.canvas.before:
             Color(0.08, 0.09, 0.12, 1)
             self.background_rect = Rectangle(pos=self.pos, size=self.size)
-
+        self.bind(pos=self._update_background, size=self._update_background)
         self.bind(pos=self._update_background, size=self._update_background)
 
-        self.controller = RelayController(RELAY_PINS, active_low=ACTIVE_LOW, gpio=gpio or GPIO)
-        self.controller.setup()
+        self.controller = controller
 
         self.buttons = []
         for relay_index, pin in enumerate(RELAY_PINS):
@@ -126,21 +125,24 @@ class RelayApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.grid = None
+        self.controller = RelayController(RELAY_PINS, active_low=ACTIVE_LOW, gpio=GPIO)
         self._cleaned_up = False
         atexit.register(self._cleanup_gpio)
 
     def build(self):
-        self.grid = RelayGrid()
+        self.controller.setup()
+        self.grid = RelayGrid(controller=self.controller)
         return self.grid
 
     def _cleanup_gpio(self):
         if self._cleaned_up:
             return
-        if self.grid is None:
-            self._cleaned_up = True
-            return
         try:
-            self.grid.cleanup()
+            if self.grid is not None:
+                self.grid.cleanup()
+            else:
+                self.controller.all_off()
+                self.controller.cleanup_gpio()
         finally:
             self._cleaned_up = True
 
