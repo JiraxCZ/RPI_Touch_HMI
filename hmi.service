@@ -1,58 +1,17 @@
-# RPI Touch HMI (720x720)
+[Unit]
+Description=RPI Touch HMI
+After=graphical.target
+Wants=graphical.target
 
-A touch-friendly Raspberry Pi HMI for controlling four relays from a 720x720 touchscreen.
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/RPI_Touch_HMI
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/home/pi/hmi-venv/bin/python /home/pi/RPI_Touch_HMI/main.py
+Restart=always
+RestartSec=2
 
-## Features
-
-- clean 720x720 GUI layout with four large touch buttons in a 2x2 grid
-- explicit relay state tracking so ON/OFF toggling is reliable
-- active-low and active-high support via `ACTIVE_LOW`
-- safe shutdown by turning all relays off before GPIO cleanup
-
-## Hardware
-
-- Raspberry Pi
-- 720x720 touch display
-- 4-channel relay board
-
-## GPIO mapping
-
-- Relay 1 -> GPIO17
-- Relay 2 -> GPIO27
-- Relay 3 -> GPIO22
-- Relay 4 -> GPIO23
-
-## Installation
-
-```bash
-cd ~/RPI_Touch_HMI
-python3 -m venv ~/hmi-venv
-source ~/hmi-venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install kivy RPi.GPIO
-```
-
-## Run manually
-
-```bash
-source ~/hmi-venv/bin/activate
-python main.py
-```
-
-## Run unit tests
-
-```bash
-source ~/hmi-venv/bin/activate
-python -m unittest discover -s tests
-```
-
-## Systemd autostart
-
-```bash
-sudo cp hmi.service /etc/systemd/system/hmi.service
-sudo systemctl daemon-reload
-sudo systemctl enable hmi.service
-sudo systemctl start hmi.service
-```
-
-If your relay board is active-high instead of active-low, set `ACTIVE_LOW = False` in `main.py`.
+[Install]
+WantedBy=graphical.target

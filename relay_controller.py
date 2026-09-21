@@ -1,87 +1,58 @@
-from kivy.app import App
-from kivy.core.window import Window
-from kivy.uix.button import Button
-from kivy.uix.gridlayout import GridLayout
+class RelayController:
+    """Hardware-independent relay state and GPIO control logic."""
 
-from relay_controller import RelayController
+    def __init__(self, relay_pins, active_low=True, gpio=None):
+        self.relay_pins = list(relay_pins)
+        self.active_low = active_low
+        self.gpio = gpio
+        self.states = {}
 
-import RPi.GPIO as GPIO
+        if self.gpio is None:
+            import RPi.GPIO as gpio_module
+            self.gpio = gpio_module
 
-Window.size = (720, 720)
-Window.borderless = True
-Window.fullscreen = 'auto'
-Window.clearcolor = (0.06, 0.08, 0.12, 1.0)
+    def setup(self):
+        self.gpio.setmode(self.gpio.BCM)
+        self.gpio.setwarnings(False)
 
-RELAY_PINS = [17, 27, 22, 23]
-ACTIVE_LOW = True
+        for pin in self.relay_pins:
+            self.gpio.setup(pin, self.gpio.OUT)
+            self.states[pin] = False
+            self._apply_state(pin, False)
 
+    def _apply_state(self, pin, is_on):
+        if self.active_low:
+            value = self.gpio.LOW if is_on else self.gpio.HIGH
+        else:
+            value = self.gpio.HIGH if is_on else self.gpio.LOW
+        self.gpio.output(pin, value)
 
-class RelayButton(Button):
-    def __init__(self, relay_number, pin, controller, **kwargs):
-        super().__init__(**kwargs)
-        self.relay_number = relay_number
-        self.pin = pin
-        self.controller = controller
-        self.background_normal = ''
-        self.background_down = ''
-        self.font_size = 26
-        self.bold = True
-        self.color = (1, 1, 1, 1)
-        self.bind(on_press=self._handle_press)
-        self.is_on = False
-        self.refresh()
+    def is_on(self, pin):
+        return bool(self.states.get(pin, False))
 
-    def _handle_press(self, _instance):
-        self.is_on = self.controller.toggle(self.pin)
-        self.refresh()
+    def set_state(self, pin, is_on):
+        if pin not in self.relay_pins:
+            raise ValueError(f'Unknown relay pin: {pin}')
 
-    def refresh(self):
-        state_text = 'ON' if self.is_on else 'OFF'
-        self.text = f'RELÉ {self.relay_number}\n{state_text}'
-        self.background_color = (0.22, 0.82, 0.38, 1.0) if self.is_on else (0.76, 0.20, 0.20, 1.0)
+        is_on = bool(is_on)
+        self._apply_state(pin, is_on)
+        self.states[pin] = is_on
+        return is_on
 
+    def toggle(self, pin):
+        return self.set_state(pin, not self.is_on(pin))
 
-class RelayPanel(GridLayout):
-    def __init__(self, controller, **kwargs):
-        super().__init__(**kwargs)
-        self.cols = 2
-        self.rows = 2
-        self.padding = 20
-        self.spacing = 20
-        self.size_hint = (1, 1)
-
-        self.buttons = []
-        for index, pin in enumerate(RELAY_PINS, start=1):
-            button = RelayButton(index, pin, controller)
-            self.buttons.append(button)
-            self.add_widget(button)
-
-        self.sync_buttons()
-
-    def sync_buttons(self):
-        for button in self.buttons:
-            button.is_on = self.controller.is_on(button.pin)
-            button.refresh()
-
-
-class RelayApp(App):
-    def build(self):
-        self.controller = RelayController(RELAY_PINS, active_low=ACTIVE_LOW, gpio=GPIO)
-        self.controller.setup()
-        self.panel = RelayPanel(self.controller)
-        return self.panel
-
-    def on_stop(self):
-        try:
-            self.controller.all_off()
-        except Exception:
-            pass
-        finally:
+    def all_off(self):
+        first_error = None
+        for pin in self.relay_pins:
             try:
-                self.controller.cleanup_gpio()
-            except Exception:
-                pass
+                self.set_state(pin, False)
+            except Exception as error:
+                if first_error is None:
+                    first_error = error
 
+        if first_error is not None:
+            raise first_error
 
-if __name__ == '__main__':
-    RelayApp().run()
+    def cleanup_gpio(self):
+        self.gpio.cleanup()

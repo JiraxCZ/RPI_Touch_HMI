@@ -1,73 +1,57 @@
-import unittest
+# RPI Touch HMI (720x720)
 
-from relay_controller import RelayController
+A touch-friendly Raspberry Pi application for controlling four relays using a 720x720 display.
 
+## Features
 
-class FakeGPIO:
-    BCM = 1
-    OUT = 0
-    HIGH = 1
-    LOW = 0
+- Four large touch controls in a 2x2 layout
+- Explicit ON/OFF state handling for reliable touch control
+- Red OFF and green ON indicators
+- Configurable active-low / active-high relay output
+- Safe GPIO cleanup when the application exits
 
-    def __init__(self):
-        self.outputs = {}
-        self.cleaned_up = False
+## GPIO mapping (BCM)
 
-    def setmode(self, mode):
-        self.mode = mode
+| Relay | GPIO | Physical pin |
+| --- | --- | --- |
+| 1 | GPIO17 | 11 |
+| 2 | GPIO27 | 13 |
+| 3 | GPIO22 | 15 |
+| 4 | GPIO23 | 16 |
 
-    def setwarnings(self, value):
-        self.warnings_enabled = value
+The default is an active-low relay board. For an active-high board, set `ACTIVE_LOW = False` in `main.py`.
 
-    def setup(self, pin, mode):
-        self.outputs.setdefault(pin, self.LOW)
+## Install on Raspberry Pi
 
-    def output(self, pin, value):
-        self.outputs[pin] = value
+```bash
+cd ~/RPI_Touch_HMI
+python3 -m venv ~/hmi-venv
+source ~/hmi-venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-    def cleanup(self):
-        self.cleaned_up = True
+## Manual start
 
+```bash
+cd ~/RPI_Touch_HMI
+source ~/hmi-venv/bin/activate
+python main.py
+```
 
-class RelayControllerTest(unittest.TestCase):
-    def test_setup_initializes_all_relays_off_for_active_low(self):
-        gpio = FakeGPIO()
-        controller = RelayController([17, 27], active_low=True, gpio=gpio)
+## Test relay logic without hardware
 
-        controller.setup()
+```bash
+cd ~/RPI_Touch_HMI
+source ~/hmi-venv/bin/activate
+python -m unittest discover -s tests
+```
 
-        self.assertFalse(controller.is_on(17))
-        self.assertFalse(controller.is_on(27))
-        self.assertEqual(gpio.outputs[17], gpio.HIGH)
-        self.assertEqual(gpio.outputs[27], gpio.HIGH)
+## Autostart with systemd
 
-    def test_toggle_uses_explicit_state_and_returns_new_value(self):
-        gpio = FakeGPIO()
-        controller = RelayController([17, 27], active_low=True, gpio=gpio)
-        controller.setup()
-
-        self.assertTrue(controller.toggle(17))
-        self.assertTrue(controller.is_on(17))
-        self.assertEqual(gpio.outputs[17], gpio.LOW)
-
-        self.assertFalse(controller.toggle(17))
-        self.assertFalse(controller.is_on(17))
-        self.assertEqual(gpio.outputs[17], gpio.HIGH)
-
-    def test_all_off_turns_every_relay_off(self):
-        gpio = FakeGPIO()
-        controller = RelayController([17, 27], active_low=False, gpio=gpio)
-        controller.setup()
-
-        controller.set_state(17, True)
-        controller.set_state(27, True)
-        controller.all_off()
-
-        self.assertFalse(controller.is_on(17))
-        self.assertFalse(controller.is_on(27))
-        self.assertEqual(gpio.outputs[17], gpio.LOW)
-        self.assertEqual(gpio.outputs[27], gpio.LOW)
-
-
-if __name__ == '__main__':
-    unittest.main()
+```bash
+sudo cp ~/RPI_Touch_HMI/hmi.service /etc/systemd/system/hmi.service
+sudo systemctl daemon-reload
+sudo systemctl enable hmi.service
+sudo systemctl restart hmi.service
+```

@@ -1,52 +1,73 @@
-class RelayController:
-    def __init__(self, relay_pins, active_low=True, gpio=None):
-        self.relay_pins = list(relay_pins)
-        self.active_low = active_low
-        self.gpio = gpio
-        self.states = {}
+import unittest
 
-        if self.gpio is None:
-            import RPi.GPIO as gpio_module
-            self.gpio = gpio_module
+from relay_controller import RelayController
 
-    def setup(self):
-        self.gpio.setmode(self.gpio.BCM)
-        self.gpio.setwarnings(False)
 
-        for pin in self.relay_pins:
-            self.gpio.setup(pin, self.gpio.OUT)
-            self.states[pin] = False
-            self._apply_state(pin, False)
+class FakeGPIO:
+    BCM = 1
+    OUT = 0
+    HIGH = 1
+    LOW = 0
 
-    def _apply_state(self, pin, is_on):
-        if self.active_low:
-            value = self.gpio.LOW if is_on else self.gpio.HIGH
-        else:
-            value = self.gpio.HIGH if is_on else self.gpio.LOW
-        self.gpio.output(pin, value)
+    def __init__(self):
+        self.outputs = {}
+        self.cleaned_up = False
 
-    def is_on(self, pin):
-        return bool(self.states.get(pin, False))
+    def setmode(self, mode):
+        self.mode = mode
 
-    def set_state(self, pin, is_on):
-        self.states[pin] = bool(is_on)
-        self._apply_state(pin, bool(is_on))
-        return self.states[pin]
+    def setwarnings(self, value):
+        self.warnings_enabled = value
 
-    def toggle(self, pin):
-        new_state = not self.is_on(pin)
-        return self.set_state(pin, new_state)
+    def setup(self, pin, mode):
+        self.outputs.setdefault(pin, self.LOW)
 
-    def all_off(self):
-        errors = []
-        for pin in self.relay_pins:
-            try:
-                self.set_state(pin, False)
-            except Exception as exc:
-                errors.append(exc)
+    def output(self, pin, value):
+        self.outputs[pin] = value
 
-        if errors:
-            raise errors[0]
+    def cleanup(self):
+        self.cleaned_up = True
 
-    def cleanup_gpio(self):
-        self.gpio.cleanup()
+
+class RelayControllerTest(unittest.TestCase):
+    def test_setup_initializes_active_low_relays_off(self):
+        gpio = FakeGPIO()
+        controller = RelayController([17, 27], active_low=True, gpio=gpio)
+
+        controller.setup()
+
+        self.assertFalse(controller.is_on(17))
+        self.assertFalse(controller.is_on(27))
+        self.assertEqual(gpio.outputs[17], gpio.HIGH)
+        self.assertEqual(gpio.outputs[27], gpio.HIGH)
+
+    def test_toggle_uses_explicit_state(self):
+        gpio = FakeGPIO()
+        controller = RelayController([17], active_low=True, gpio=gpio)
+        controller.setup()
+
+        self.assertTrue(controller.toggle(17))
+        self.assertTrue(controller.is_on(17))
+        self.assertEqual(gpio.outputs[17], gpio.LOW)
+
+        self.assertFalse(controller.toggle(17))
+        self.assertFalse(controller.is_on(17))
+        self.assertEqual(gpio.outputs[17], gpio.HIGH)
+
+    def test_all_off_turns_every_relay_off(self):
+        gpio = FakeGPIO()
+        controller = RelayController([17, 27], active_low=False, gpio=gpio)
+        controller.setup()
+        controller.set_state(17, True)
+        controller.set_state(27, True)
+
+        controller.all_off()
+
+        self.assertFalse(controller.is_on(17))
+        self.assertFalse(controller.is_on(27))
+        self.assertEqual(gpio.outputs[17], gpio.LOW)
+        self.assertEqual(gpio.outputs[27], gpio.LOW)
+
+
+if __name__ == '__main__':
+    unittest.main()
